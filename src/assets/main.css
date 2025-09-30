@@ -1,0 +1,34 @@
+:root {
+  --bs-body-bg-rgb: 102, 126, 234;
+  --bs-body-bg: rgb(var(--bs-body-bg-rgb));
+  --bs-body-color-rgb: 255, 255, 255;
+  --bs-body-color: rgb(var(--bs-body-rgb));
+
+  --bs-heading-color-rgb: 255, 255, 255;
+  --bs-heading-color: rgb(var(--bs-heading-color-rgb));
+
+  --bs-primary-rgb: 220, 220, 255;
+  --bs-primary: rgb(var(--bs-primary-rgb));
+
+  --bs-secondary-color-rgb: 190, 180, 220;
+  --bs-secondary-color: rgb(var(--bs-secondary-color-rgb));
+}
+
+body {
+  display: flex;
+  min-height: 100vh;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+#app {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
