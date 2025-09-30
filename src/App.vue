@@ -6,6 +6,7 @@ import ScoreDisplay from '@/components/ScoreDisplay.vue'
 import GameControls from '@/components/GameControls.vue'
 import GameOverModal from '@/components/GameOverModal.vue'
 import ScorePopup from '@/components/ScorePopup.vue'
+import PageFooter from '@/components/PageFooter.vue'
 import { useGameStore } from '@/stores/game'
 import { useHighscoreStore } from '@/stores/highscore'
 
@@ -21,7 +22,7 @@ watch(
 </script>
 
 <template>
-  <div class="flex-fill d-flex flex-column align-items-center overflow-hidden gap-5 m-4">
+  <div class="flex-fill d-flex flex-column align-items-center gap-5 m-4 overflow-hidden">
     <header>
       <h1 class="display-6 text-center">Block Puzzle</h1>
 
@@ -33,5 +34,7 @@ watch(
 
     <ScorePopup />
     <GameOverModal />
+
+    <PageFooter />
   </div>
 </template>
