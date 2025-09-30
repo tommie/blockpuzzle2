@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, shallowRef, watch } from 'vue'
+import { ref, onMounted, onUnmounted, shallowRef, watch, computed } from 'vue'
 import * as PIXI from 'pixi.js'
 
 import { easeIn, easeOut, interp, useAnimations } from '@/animation'
@@ -11,7 +11,7 @@ declare module 'pixi.js' {
   interface Container {
     userData?: {
       index: number
-      pieceIndex?: number
+      pieceIndex: number
     }
   }
 }
@@ -28,7 +28,6 @@ interface DraggedPiece {
   }
 }
 
-const PICKUP_BLOCK_FACTOR = 0.6
 const GRID_PADDING = 20
 const GRID_LINE_COLOR = 0x4477ff
 const SCALE_ANIMATION_DURATION = 150 // milliseconds
@@ -46,8 +45,10 @@ let blockTexture: PIXI.Texture | null = null
 
 // Grid and piece rendering variables
 const gridSize = ref(NaN)
-const gridBlockSize = ref(NaN)
-const pickupBlockSize = ref(NaN)
+const gridBlockSize = computed(() => gridSize.value / gameStore.gridSize)
+const pickupScale = computed(
+  () => gridSize.value / NUM_AVAILABLE_PIECES / (5 + 2) / gridBlockSize.value,
+)
 
 const gridContainer = new PIXI.Container()
 const piecesContainer = new PIXI.Container()
@@ -78,9 +79,8 @@ onMounted(async () => {
   blockTexture = await PIXI.Assets.load(blockImage)
 
   setupContainers()
-  handleResize()
-
   updateOccupiedCells()
+  handleResize()
 })
 
 onUnmounted(() => {
@@ -118,6 +118,7 @@ function setupContainers() {
     container.cursor = 'grab'
     container.userData = {
       index: i,
+      pieceIndex: -1,
     }
 
     piecesContainer.addChild(container)
@@ -143,8 +144,6 @@ function handleResize() {
   if (!app.value) return
 
   gridSize.value = Math.min(app.value.renderer.width, app.value.renderer.height) - 2 * GRID_PADDING
-  gridBlockSize.value = gridSize.value / gameStore.gridSize
-  pickupBlockSize.value = PICKUP_BLOCK_FACTOR * gridBlockSize.value
 
   updateContainerLayout()
   updateGridBackground()
@@ -217,52 +216,53 @@ async function updateAvailablePieces() {
 
   const width = app.value.renderer.width
   const height = app.value.renderer.height
-  const pieceSpacing = gridSize.value / NUM_AVAILABLE_PIECES
 
   const animationPromises: Promise<void>[] = []
 
   gameStore.availablePieces.forEach((pieceIndex, i) => {
-    const pieceContainer = piecesContainer.getChildAt<PIXI.ContainerChild>(i)
-    const wasInvisible = !pieceContainer.visible
+    const container = piecesContainer.getChildAt<PIXI.ContainerChild>(i)
+    const wasVisible = container.visible
 
-    pieceContainer.visible = pieceIndex >= 0
+    container.visible = pieceIndex >= 0
 
-    pieceContainer.removeChildren()
+    container.removeChildren()
 
-    if (!pieceContainer.visible) return
+    if (pieceIndex < 0) return
 
-    let maxAlong = 0
+    const maxAlong = PIECES[pieceIndex].reduce(
+      (acc, [x, y]) => Math.max(acc, (width >= height ? y : x) + 1),
+      0,
+    )
 
     // Draw piece blocks
     for (const [x, y] of PIECES[pieceIndex]) {
       const blockSprite = new PIXI.Sprite(blockTexture!)
 
-      blockSprite.width = pickupBlockSize.value
-      blockSprite.height = pickupBlockSize.value
-      blockSprite.x = x * pickupBlockSize.value
-      blockSprite.y = y * pickupBlockSize.value
+      blockSprite.width = gridBlockSize.value
+      blockSprite.height = gridBlockSize.value
+      blockSprite.x = x * gridBlockSize.value
+      blockSprite.y = y * gridBlockSize.value
 
-      pieceContainer.addChild(blockSprite)
-
-      maxAlong = Math.max(maxAlong, width >= height ? y : x)
+      container.addChild(blockSprite)
     }
 
-    // Position piece in pieces area
-    const along = (i + 0.5) * pieceSpacing - ((maxAlong + 1) * pickupBlockSize.value) / 2
-    pieceContainer.x = width >= height ? 0 : along
-    pieceContainer.y = width >= height ? along : 0
+    container.scale = pickupScale.value
+    container.pivot.set(
+      width >= height ? 0 : (maxAlong * gridBlockSize.value) / 2,
+      width >= height ? (maxAlong * gridBlockSize.value) / 2 : 0,
+    )
 
-    pieceContainer.userData!.pieceIndex = pieceIndex
+    container.userData!.pieceIndex = pieceIndex
 
     // If this piece was invisible but is now becoming visible, animate it
-    if (wasInvisible && pieceContainer.visible) {
-      pieceContainer.scale.set(0)
-      pieceContainer.alpha = 0
+    if (!wasVisible && container.visible) {
+      container.scale.set(0)
+      container.alpha = 0
       animationPromises.push(
         (async () => {
-          await animateNewPiece(pieceContainer)
-          pieceContainer.scale.set(1)
-          pieceContainer.alpha = 1
+          await animateNewPiece(container)
+          container.scale.set(pickupScale.value)
+          container.alpha = 1
         })(),
       )
     }
@@ -270,6 +270,37 @@ async function updateAvailablePieces() {
 
   // Wait for all animations to complete
   await Promise.all(animationPromises)
+
+  updateAvailablePiecesBounds()
+}
+
+function updateAvailablePiecesBounds() {
+  if (!app.value) return
+
+  const width = app.value.renderer.width
+  const height = app.value.renderer.height
+  const pieceSpacing = gridSize.value / NUM_AVAILABLE_PIECES
+
+  const along = 5 * gridBlockSize.value
+  const across = (5 + 2) * gridBlockSize.value
+  const w = width >= height ? across : along
+  const h = width >= height ? along : across
+
+  for (let i = 0; i < piecesContainer.children.length; ++i) {
+    const container = piecesContainer.getChildAt<PIXI.ContainerChild>(i)
+    const bounds = container.getBounds()
+    container.hitArea = new PIXI.Rectangle(
+      width >= height ? 0 : -(5 * gridBlockSize.value - bounds.width / pickupScale.value) / 2,
+      width >= height ? -(5 * gridBlockSize.value - bounds.height / pickupScale.value) / 2 : 0,
+      w,
+      h,
+    )
+
+    // Position piece in pieces area
+    const along = (i + 0.5) * pieceSpacing
+    container.x = width >= height ? 0 : along
+    container.y = width >= height ? along : 0
+  }
 }
 
 async function animateNewPiece(container: PIXI.Container) {
@@ -277,7 +308,7 @@ async function animateNewPiece(container: PIXI.Container) {
     const easeProgress = easeIn(elapsed / NEW_PIECES_ANIMATION_DURATION)
 
     // Scale up from 0 to 1 and fade in
-    container.scale.set(interp(easeProgress, 0, 1))
+    container.scale.set(interp(easeProgress, 0, pickupScale.value))
     container.alpha = interp(easeProgress, 0, 1)
 
     return easeProgress >= 1
@@ -287,13 +318,12 @@ async function animateNewPiece(container: PIXI.Container) {
 // Drag and Drop Event Handlers
 function onPointerDown(event: PIXI.FederatedPointerEvent) {
   // Check if we clicked on a piece
-  const target = event.target as PIXI.Container
-  if (!target || target.parent !== piecesContainer) return
+  if (event.target.parent !== piecesContainer) return
 
-  const pieceData = target.userData
+  const pieceData = event.target.userData
   if (!pieceData) return
 
-  startDrag(pieceData.index, event.global, target.toLocal(event.global))
+  startDrag(pieceData.index, event.global, event.target.toLocal(event.global))
 
   // Prevent event from bubbling
   event.stopPropagation()
@@ -322,7 +352,7 @@ async function startDrag(index: number, global: PIXI.PointData, offset: PIXI.Poi
     gridGraphics: new PIXI.Graphics(),
     animation: {
       ease: easeOut,
-      scale: [1, gridBlockSize.value / pickupBlockSize.value],
+      scale: [pickupScale.value, 1],
     },
   }
 
@@ -330,10 +360,10 @@ async function startDrag(index: number, global: PIXI.PointData, offset: PIXI.Poi
   for (const [x, y] of PIECES[gameStore.availablePieces[index]]) {
     const blockSprite = new PIXI.Sprite(blockTexture)
 
-    blockSprite.width = pickupBlockSize.value
-    blockSprite.height = pickupBlockSize.value
-    blockSprite.x = x * pickupBlockSize.value
-    blockSprite.y = y * pickupBlockSize.value
+    blockSprite.width = gridBlockSize.value
+    blockSprite.height = gridBlockSize.value
+    blockSprite.x = x * gridBlockSize.value
+    blockSprite.y = y * gridBlockSize.value
     blockSprite.alpha = 0.8
 
     dragged.value.container.addChild(blockSprite)
@@ -394,8 +424,8 @@ function globalToGrid(global: PIXI.PointData, offset: PIXI.PointData) {
   const gridPos = gridContainer.toLocal(global)
 
   // Convert to grid coordinates, accounting for pointer offset
-  const gridX = Math.round(gridPos.x / gridBlockSize.value - offset.x / pickupBlockSize.value)
-  const gridY = Math.round(gridPos.y / gridBlockSize.value - offset.y / pickupBlockSize.value)
+  const gridX = Math.round(gridPos.x / gridBlockSize.value - offset.x / gridBlockSize.value)
+  const gridY = Math.round(gridPos.y / gridBlockSize.value - offset.y / gridBlockSize.value)
 
   return new PIXI.Point(gridX, gridY)
 }
@@ -478,29 +508,24 @@ async function endDrag(global: PIXI.PointData, piece: DraggedPiece) {
     const toPoint = dragPreviewContainer.toLocal(
       occupiedCellSprites[grid.y * gameStore.gridSize + grid.x].toGlobal({ x: 0, y: 0 }),
     )
-    toPoint.x += (piece.offset.x * gridBlockSize.value) / pickupBlockSize.value
-    toPoint.y += (piece.offset.y * gridBlockSize.value) / pickupBlockSize.value
-
-    piece.animation = {
-      ease: easeIn,
-      scale: [
-        gridBlockSize.value / pickupBlockSize.value,
-        gridBlockSize.value / pickupBlockSize.value,
-      ],
-      point: [piece.container.position.clone(), toPoint],
-    }
-  } else {
-    const toPoint = dragPreviewContainer.toLocal(
-      piecesContainer.toGlobal(
-        piecesContainer.getChildAt<PIXI.ContainerChild>(piece.index).position,
-      ),
-    )
     toPoint.x += piece.offset.x
     toPoint.y += piece.offset.y
 
     piece.animation = {
+      ease: easeIn,
+      scale: [1, 1],
+      point: [piece.container.position.clone(), toPoint],
+    }
+  } else {
+    const toPoint = dragPreviewContainer.toLocal(
+      piecesContainer.getChildAt<PIXI.ContainerChild>(piece.index).toGlobal({ x: 0, y: 0 }),
+    )
+    toPoint.x += piece.offset.x * pickupScale.value
+    toPoint.y += piece.offset.y * pickupScale.value
+
+    piece.animation = {
       ease: easeOut,
-      scale: [gridBlockSize.value / pickupBlockSize.value, 1],
+      scale: [1, pickupScale.value],
       point: [piece.container.position.clone(), toPoint],
     }
   }
