@@ -28,6 +28,10 @@ interface DraggedPiece {
   }
 }
 
+// This changes with the number of pickable pieces and the maximum size of a piece.
+const PICKUP_AREA_FACTOR = 0.4
+
+// Margin around the board to give mouse events a better chance.
 const GRID_PADDING = 20
 const GRID_LINE_COLOR = 0x4477ff
 const SCALE_ANIMATION_DURATION = 150 // milliseconds
@@ -74,7 +78,7 @@ onMounted(async () => {
     resizeTo: containerRef.value!,
   })
 
-  window.addEventListener('resize', handleResize)
+  app.value.renderer.addListener('resize', handleResize)
 
   blockTexture = await PIXI.Assets.load(blockImage)
 
@@ -84,8 +88,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  window.removeEventListener('resize', handleResize)
-
+  app.value?.renderer.removeListener('resize', handleResize)
   app.value?.destroy(true)
   app.value = null
 })
@@ -143,7 +146,13 @@ function setupContainers() {
 function handleResize() {
   if (!app.value) return
 
-  gridSize.value = Math.min(app.value.renderer.width, app.value.renderer.height) - 2 * GRID_PADDING
+  gridSize.value =
+    Math.min(
+      app.value.renderer.width,
+      app.value.renderer.height,
+      Math.max(app.value.renderer.width, app.value.renderer.height) / (1 + PICKUP_AREA_FACTOR),
+    ) -
+    2 * GRID_PADDING
 
   updateContainerLayout()
   updateGridBackground()
@@ -158,11 +167,23 @@ function updateContainerLayout() {
   const width = app.value.renderer.width
   const height = app.value.renderer.height
 
-  gridContainer.x = width >= height ? GRID_PADDING : (width - gridSize.value) / 2
-  gridContainer.y = width >= height ? (height - gridSize.value) / 2 : GRID_PADDING
+  gridContainer.x =
+    width >= height
+      ? (width - gridSize.value * (1 + PICKUP_AREA_FACTOR)) / 2
+      : (width - gridSize.value) / 2
+  gridContainer.y =
+    width >= height
+      ? (height - gridSize.value) / 2
+      : (height - gridSize.value * (1 + PICKUP_AREA_FACTOR)) / 2
 
-  piecesContainer.x = width >= height ? gridSize.value + 3 * GRID_PADDING : GRID_PADDING
-  piecesContainer.y = width >= height ? GRID_PADDING : gridSize.value + 3 * GRID_PADDING
+  piecesContainer.x =
+    width >= height
+      ? (width - gridSize.value * (1 + PICKUP_AREA_FACTOR)) / 2 + gridSize.value + GRID_PADDING
+      : (width - gridSize.value) / 2
+  piecesContainer.y =
+    width >= height
+      ? (height - gridSize.value) / 2
+      : (height - gridSize.value * (1 + PICKUP_AREA_FACTOR)) / 2 + gridSize.value + GRID_PADDING
 }
 
 function updateGridBackground() {
@@ -438,8 +459,6 @@ function updateGridPreview(global: PIXI.PointData, piece: DraggedPiece) {
   piece.gridGraphics.y = grid.y * gridBlockSize.value
 
   const canPlace = gameStore.canPlacePiece(piece.index, grid.x, grid.y)
-  const previewColor = canPlace ? 0x00ff00 : 0xff0000
-
   piece.gridGraphics.clear()
 
   for (const [x, y] of PIECES[gameStore.availablePieces[piece.index]]) {
@@ -459,7 +478,8 @@ function updateGridPreview(global: PIXI.PointData, piece: DraggedPiece) {
       gridBlockSize.value - 2,
       gridBlockSize.value - 2,
     )
-    piece.gridGraphics.fill({ color: previewColor, alpha: 0.1 })
+
+    piece.gridGraphics.fill({ color: canPlace ? 0x00ff00 : 0xff0000, alpha: canPlace ? 0.2 : 0.4 })
   }
 }
 
@@ -577,25 +597,7 @@ watch(
 </script>
 
 <template>
-  <main class="flex-fill d-flex">
-    <div ref="containerRef" class="game-canvas mw-100 position-relative">
-      <canvas ref="canvasRef" class="position-absolute" />
-    </div>
+  <main ref="containerRef" class="position-relative">
+    <canvas ref="canvasRef" class="position-absolute start-0 top-0" />
   </main>
 </template>
-
-<style scoped>
-/* Portrait orientation - taller canvas (game board above, shapes below) */
-@media (orientation: portrait) {
-  .game-canvas {
-    aspect-ratio: 10/14;
-  }
-}
-
-/* Landscape orientation - wider canvas (game board left, shapes right) */
-@media (orientation: landscape) {
-  .game-canvas {
-    aspect-ratio: 14/10;
-  }
-}
-</style>

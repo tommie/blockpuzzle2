@@ -24,7 +24,7 @@ function toggleSound() {
 
 <template>
   <div class="d-flex justify-content-center gap-3">
-    <button @click="handleNewGame" class="btn btn-primary" :disabled="false">New Game</button>
+    <button @click="handleNewGame" class="btn btn-primary text-nowrap">New Game</button>
 
     <input
       type="checkbox"

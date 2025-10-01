@@ -15,20 +15,10 @@
 }
 
 body {
-  display: flex;
   min-height: 100vh;
-  height: 100vh;
-  width: 100vw;
-  overflow: hidden;
-  align-items: stretch;
   justify-content: stretch;
 }
 
 #app {
-  flex: 1;
-  display: flex;
-  align-items: stretch;
-  justify-content: center;
-
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }

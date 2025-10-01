@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 
 import GameBoard from '@/components/GameBoard.vue'
 import ScoreDisplay from '@/components/ScoreDisplay.vue'
@@ -19,22 +19,50 @@ watch(
     highscoreStore.updateScore(score)
   },
 )
+
+function useMediaQuery(query: string) {
+  const match = window.matchMedia(query)
+  const matches = ref(match.matches)
+
+  function onChange() {
+    matches.value = match.matches
+  }
+
+  onMounted(() => match.addEventListener('change', onChange))
+  onUnmounted(() => match.removeEventListener('change', onChange))
+  console.log(query, matches.value)
+
+  return matches
+}
+
+const isPortrait = useMediaQuery('(orientation: portrait)')
 </script>
 
 <template>
-  <div class="flex-fill d-flex flex-column align-items-center gap-5 m-4 overflow-hidden">
-    <header>
+  <div
+    :class="[
+      'flex-fill d-flex gap-4 m-4 overflow-hidden',
+      isPortrait ? 'flex-column' : 'flex-row justify-content-center',
+    ]"
+  >
+    <header class="d-flex flex-column">
+      <div class="flex-fill" />
+
       <h1 class="display-6 text-center">Block Puzzle</h1>
 
       <ScoreDisplay />
       <GameControls />
+
+      <div class="flex-fill" />
+
+      <PageFooter v-if="!isPortrait" />
     </header>
 
-    <GameBoard />
+    <GameBoard class="flex-fill" />
 
     <ScorePopup />
     <GameOverModal />
 
-    <PageFooter />
+    <PageFooter v-if="isPortrait" />
   </div>
 </template>
