@@ -29,7 +29,6 @@ function useMediaQuery(query: string) {
 
   onMounted(() => match.addEventListener('change', onChange))
   onUnmounted(() => match.removeEventListener('change', onChange))
-  console.log(query, matches.value)
 
   return matches
 }
