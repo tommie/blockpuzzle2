@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, shallowRef, watch, computed } from 'vue'
 import * as PIXI from 'pixi.js'
+import { ref, onMounted, onUnmounted, shallowRef, watch, computed } from 'vue'
 
 import { easeIn, easeOut, interp, useAnimations } from '@/animation'
-import { useAudio } from '@/audio'
 import blockImage from '@/assets/block.png'
-import { NUM_AVAILABLE_PIECES, PIECES, useGameStore } from '@/stores/game'
+import { useAudio } from '@/audio'
+import { MAX_NUM_PIECE_BLOCKS, NUM_AVAILABLE_PIECES, PIECES, useGameStore } from '@/stores/game'
 
 declare module 'pixi.js' {
   interface Container {
@@ -30,6 +30,7 @@ interface DraggedPiece {
 
 // This changes with the number of pickable pieces and the maximum size of a piece.
 const PICKUP_AREA_FACTOR = 0.4
+const NUM_EXTRA_PICKUP_BLOCKS = 3
 
 // Margin around the board to give mouse events a better chance.
 const GRID_PADDING = 20
@@ -46,12 +47,17 @@ const canvasRef = shallowRef<HTMLCanvasElement>()
 const app = shallowRef<PIXI.Application | null>(null)
 const animations = useAnimations(app)
 let blockTexture: PIXI.Texture | null = null
+let isUnmounted = false
 
 // Grid and piece rendering variables
 const gridSize = ref(NaN)
 const gridBlockSize = computed(() => gridSize.value / gameStore.gridSize)
 const pickupScale = computed(
-  () => gridSize.value / NUM_AVAILABLE_PIECES / (5 + 2) / gridBlockSize.value,
+  () =>
+    gridSize.value /
+    NUM_AVAILABLE_PIECES /
+    (MAX_NUM_PIECE_BLOCKS + NUM_EXTRA_PICKUP_BLOCKS) /
+    gridBlockSize.value,
 )
 
 const gridContainer = new PIXI.Container()
@@ -67,18 +73,30 @@ const dragged = shallowRef<DraggedPiece>()
 let clearingCells: number[] | null = null
 
 onMounted(async () => {
-  app.value = new PIXI.Application()
+  const newApp = new PIXI.Application()
 
-  await app.value.init({
-    canvas: canvasRef.value!,
-    backgroundAlpha: 0,
-    antialias: true,
-    resolution: window.devicePixelRatio,
-    autoDensity: true,
-    resizeTo: containerRef.value!,
-  })
+  try {
+    await newApp.init({
+      canvas: canvasRef.value!,
+      backgroundAlpha: 0,
+      antialias: true,
+      resolution: window.devicePixelRatio,
+      autoDensity: true,
+      resizeTo: containerRef.value!,
+    })
+  } finally {
+    // If init hasn't finished before onUnmounted is called, Application.destroy throws.
+    // It doesn't deal well with partial instantiation.
+    // This is a problem in HMR of Pinia stores, not in production.
+    if (isUnmounted) {
+      newApp.destroy(true)
+      return
+    }
+  }
 
-  app.value.renderer.addListener('resize', handleResize)
+  newApp.renderer.addListener('resize', handleResize)
+
+  app.value = newApp
 
   blockTexture = await PIXI.Assets.load(blockImage)
 
@@ -88,7 +106,9 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  app.value?.renderer.removeListener('resize', handleResize)
+  isUnmounted = true
+
+  app.value?.renderer?.removeListener('resize', handleResize)
   app.value?.destroy(true)
   app.value = null
 })
@@ -302,25 +322,34 @@ function updateAvailablePiecesBounds() {
   const height = app.value.renderer.height
   const pieceSpacing = gridSize.value / NUM_AVAILABLE_PIECES
 
-  const along = 5 * gridBlockSize.value
-  const across = (5 + 2) * gridBlockSize.value
+  const along = MAX_NUM_PIECE_BLOCKS * gridBlockSize.value
+  const across = (MAX_NUM_PIECE_BLOCKS + NUM_EXTRA_PICKUP_BLOCKS) * gridBlockSize.value
   const w = width >= height ? across : along
   const h = width >= height ? along : across
 
   for (let i = 0; i < piecesContainer.children.length; ++i) {
     const container = piecesContainer.getChildAt<PIXI.ContainerChild>(i)
     const bounds = container.getBounds()
-    container.hitArea = new PIXI.Rectangle(
-      width >= height ? 0 : -(5 * gridBlockSize.value - bounds.width / pickupScale.value) / 2,
-      width >= height ? -(5 * gridBlockSize.value - bounds.height / pickupScale.value) / 2 : 0,
+    const hitArea = new PIXI.Rectangle(
+      width >= height ? 0 : -(along - bounds.width / pickupScale.value) / 2,
+      width >= height ? -(along - bounds.height / pickupScale.value) / 2 : 0,
       w,
       h,
     )
+    container.hitArea = hitArea
+
+    if (import.meta.env.DEV) {
+      // Visualize the hit area in development.
+      const g = new PIXI.Graphics()
+      g.rect(hitArea.x, hitArea.y, hitArea.width, hitArea.height)
+      g.fill({ color: 0xffffff, alpha: 0.05 })
+      container.addChild(g)
+    }
 
     // Position piece in pieces area
-    const along = (i + 0.5) * pieceSpacing
-    container.x = width >= height ? 0 : along
-    container.y = width >= height ? along : 0
+    const alongPos = (i + 0.5) * pieceSpacing
+    container.x = width >= height ? 0 : alongPos
+    container.y = width >= height ? alongPos : 0
   }
 }
 
@@ -598,6 +627,6 @@ watch(
 
 <template>
   <main ref="containerRef" class="position-relative">
-    <canvas ref="canvasRef" class="position-absolute start-0 top-0" />
+    <canvas ref="canvasRef" class="position-absolute start-0 top-0" @contextmenu.prevent />
   </main>
 </template>

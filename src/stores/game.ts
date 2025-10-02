@@ -4,6 +4,7 @@ import { defineStore } from 'pinia'
 import { type GameState, type PieceCoordinate } from '@/types/game'
 
 export const NUM_AVAILABLE_PIECES = 3
+export const MAX_NUM_PIECE_BLOCKS = 5
 
 const STORAGE_KEY = 'blockpuzzle-game-state'
 
