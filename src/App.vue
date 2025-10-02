@@ -5,7 +5,6 @@ import GameBoard from '@/components/GameBoard.vue'
 import ScoreDisplay from '@/components/ScoreDisplay.vue'
 import GameControls from '@/components/GameControls.vue'
 import GameOverModal from '@/components/GameOverModal.vue'
-import ScorePopup from '@/components/ScorePopup.vue'
 import PageFooter from '@/components/PageFooter.vue'
 import { useGameStore } from '@/stores/game'
 import { useHighscoreStore } from '@/stores/highscore'
@@ -60,7 +59,6 @@ const isPortrait = useMediaQuery('(orientation: portrait)')
 
     <GameBoard class="flex-fill" />
 
-    <ScorePopup />
     <GameOverModal />
 
     <PageFooter v-if="isPortrait" />
