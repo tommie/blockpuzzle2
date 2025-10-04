@@ -321,18 +321,21 @@ function updateAvailablePiecesBounds() {
   const width = app.value.renderer.width
   const height = app.value.renderer.height
   const pieceSpacing = gridSize.value / NUM_AVAILABLE_PIECES
+  const isLandscape = width >= height
 
-  const along = MAX_NUM_PIECE_BLOCKS * gridBlockSize.value
-  const across = (MAX_NUM_PIECE_BLOCKS + NUM_EXTRA_PICKUP_BLOCKS) * gridBlockSize.value
-  const w = width >= height ? across : along
-  const h = width >= height ? along : across
+  const along = (MAX_NUM_PIECE_BLOCKS + 2) * gridBlockSize.value
+  const across =
+    Math.max(width, height) -
+    (gridBlockSize.value + GRID_PADDING + (isLandscape ? 0 : GRID_PADDING)) / pickupScale.value
+  const w = isLandscape ? across : along
+  const h = isLandscape ? along : across
 
   for (let i = 0; i < piecesContainer.children.length; ++i) {
     const container = piecesContainer.getChildAt<PIXI.ContainerChild>(i)
     const bounds = container.getBounds()
     const hitArea = new PIXI.Rectangle(
-      width >= height ? 0 : -(along - bounds.width / pickupScale.value) / 2,
-      width >= height ? -(along - bounds.height / pickupScale.value) / 2 : 0,
+      isLandscape ? 0 : -(along - bounds.width / pickupScale.value) / 2,
+      isLandscape ? -(along - bounds.height / pickupScale.value) / 2 : 0,
       w,
       h,
     )
@@ -343,13 +346,14 @@ function updateAvailablePiecesBounds() {
       const g = new PIXI.Graphics()
       g.rect(hitArea.x, hitArea.y, hitArea.width, hitArea.height)
       g.fill({ color: 0xffffff, alpha: 0.05 })
+      g.stroke({ color: 0xffffff, alpha: 0.4 })
       container.addChild(g)
     }
 
     // Position piece in pieces area
     const alongPos = (i + 0.5) * pieceSpacing
-    container.x = width >= height ? 0 : alongPos
-    container.y = width >= height ? alongPos : 0
+    container.x = isLandscape ? 0 : alongPos
+    container.y = isLandscape ? alongPos : 0
   }
 }
 

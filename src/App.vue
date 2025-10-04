@@ -39,11 +39,11 @@ const isPortrait = useMediaQuery('(orientation: portrait)')
 <template>
   <div
     :class="[
-      'flex-fill d-flex gap-4 m-4 overflow-hidden',
+      'flex-fill d-flex overflow-hidden',
       isPortrait ? 'flex-column' : 'flex-row justify-content-center',
     ]"
   >
-    <header class="d-flex flex-column">
+    <header class="d-flex flex-column mt-4">
       <div class="flex-fill" />
 
       <h1 class="display-6 text-center">Block Puzzle</h1>
@@ -60,6 +60,6 @@ const isPortrait = useMediaQuery('(orientation: portrait)')
 
     <GameOverModal />
 
-    <PageFooter v-if="isPortrait" />
+    <PageFooter v-if="isPortrait" class="bg-dark" style="--bs-bg-opacity: 0.1" />
   </div>
 </template>
